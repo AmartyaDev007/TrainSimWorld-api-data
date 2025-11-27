@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TSW HUD</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Link CSS -->
+  <link rel="stylesheet" href="hud.css" />
+</head>
+<body>
+
+  <div class="hud">
+    <div class="hud-header">
+      <div>TSW HUD</div>
+      <div class="status-pill" id="connectionStatus">
+        <span class="dot"></span>
+        <span id="statusText">Connecting…</span>
+      </div>
+    </div>
+
+    <div class="main-row">
+      <!-- SPEED / ACCEL -->
+      <div class="card">
+        <div class="label">Speed</div>
+        <div style="display:flex; align-items: baseline; gap: 8px; margin-top:4px;">
+          <div class="speed-value" id="speedValue">0</div>
+          <div class="speed-unit">km/h</div>
+        </div>
+        <div class="accel-row">
+          <div>
+            Accel:
+            <span class="accel-value" id="accelValue">0.00 m/s²</span>
+          </div>
+          <div class="accel-badge idle" id="accelBadge">Idle</div>
+        </div>
+      </div>
+
+      <!-- SIGNAL / SPEED LIMITS -->
+      <div class="card">
+        <div class="label">Next Signal & Limits</div>
+        <div style="margin-top:4px; font-size:13px;">
+          <div id="signalAspectRow">
+            <span class="signal-circle" id="signalDot">?</span>
+            <span id="signalText">Unknown</span>
+          </div>
+        </div>
+        <div class="chip-row" id="speedLimitChips"></div>
+      </div>
+    </div>
+
+    <div class="secondary-row">
+      <!-- NEXT STATION -->
+      <div class="card">
+        <div class="label">Next Station</div>
+        <div class="station-name" id="stationName">—</div>
+        <div class="station-distance" id="stationDistance">Distance: —</div>
+      </div>
+
+      <!-- GRADIENT -->
+      <div class="card">
+        <div class="label">Gradient</div>
+        <div class="gradient-value" id="gradientValue">0.0%</div>
+        <div class="gradient-tag" id="gradientTag">Level</div>
+        <div class="chip-row" style="margin-top:6px;">
+          <div class="chip" id="rawGradientChip">HUD: —</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-row">
+      <div>
+        <span class="tiny">Distances are in meters, speeds in km/h.</span>
+      </div>
+      <div class="tiny" id="lastUpdate">Last update: —</div>
+    </div>
+  </div>
+
+  <!-- Link JS -->
+  <script src="hud.js"></script>
+</body>
+</html>
