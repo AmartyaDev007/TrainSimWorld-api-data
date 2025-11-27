@@ -11,6 +11,11 @@ const connectionStatusEl = document.getElementById("connectionStatus");
 const statusTextEl = document.getElementById("statusText");
 const lastUpdateEl = document.getElementById("lastUpdate");
 
+const powerValueEl = document.getElementById("powerValue");
+const elecBrakeValueEl = document.getElementById("elecBrakeValue");
+const locoBrakeValueEl = document.getElementById("locoBrakeValue");
+const trainBrakeValueEl = document.getElementById("trainBrakeValue");
+
 function formatKm(distanceMeters) {
   if (distanceMeters == null) return "—";
   if (distanceMeters >= 1000) {
@@ -144,6 +149,12 @@ function handleStatus(data) {
   } else {
     gradientValueEl.textContent = rawG.toFixed(1) + "%";
   }
+
+  // Controls
+  powerValueEl.textContent = (data.power_pct ?? 0) + "%";
+  elecBrakeValueEl.textContent = (data.electric_brake_pct ?? 0) + "%";
+  locoBrakeValueEl.textContent = (data.loco_brake_pct ?? 0) + "%";
+  trainBrakeValueEl.textContent = (data.train_brake_pct ?? 0) + "%";
 
   lastUpdateEl.textContent = "Last update: " + new Date().toLocaleTimeString();
 }

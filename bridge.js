@@ -103,6 +103,12 @@ async function buildStatusSnapshot() {
   // 3. Track data (for gradient calc)
   const track = await tsw(`/get/DriverAid.TrackData`);
 
+  // 4. Controls (Throttle / Brakes)
+  const powerHandle = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetPowerHandle`);
+  const electricBrake = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetElectricBrakeHandle`);
+  const locoBrake = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetLocomotiveBrakeHandle`);
+  const trainBrake = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetTrainBrakeHandle`);
+
   const speedMps = speed["Speed (ms)"] ?? speed.return ?? speed.value ?? 0;
   const speedKph = speedMps * 3.6;
   const accelMps2 = computeAcceleration(speedMps);
@@ -165,7 +171,13 @@ async function buildStatusSnapshot() {
     next_signals: nextSignals,
 
     next_station_name: nextStationName,
-    next_station_distance: nextStationDistance
+    next_station_distance: nextStationDistance,
+
+    // Controls
+    power_pct: Math.round((powerHandle.Power ?? 0) * 10),
+    electric_brake_pct: Math.round((electricBrake.HandlePosition ?? 0) * 100),
+    loco_brake_pct: Math.round((locoBrake.HandlePosition ?? 0) * 100),
+    train_brake_pct: Math.round((trainBrake.HandlePosition ?? 0) * 100)
   };
 }
 
