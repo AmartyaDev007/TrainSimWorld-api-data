@@ -86,30 +86,42 @@ function updateSignal(aspect, nextSignals) {
   }
 }
 
-function updateSpeedLimits(current, next, subsequent) {
+function updateSpeedLimits(current, next, nextSpeedLimits) {
   const base = speedLimitChipsEl;
 
-  const makeChip = (label, value, cls) => {
-    if (!value || value.value == null) return;
-    const kmh = (value.value * 3.6).toFixed(0);
+  const makeChip = (label, speedValue, distance, cls) => {
+    if (speedValue == null) return;
+    const kmh = (speedValue * 3.6).toFixed(0);
     const el = document.createElement("div");
     el.className = "chip " + (cls || "");
-    el.textContent = `${label}: ${kmh} km/h`;
+
+    if (distance != null) {
+      const meters = Math.round(distance / 100);
+      el.textContent = `${label}: ${kmh} km/h (${meters} m)`;
+    } else {
+      el.textContent = `${label}: ${kmh} km/h`;
+    }
+
     base.appendChild(el);
   };
 
-  makeChip("Now", current, "highlight");
-  makeChip("Next", next, "warn");
+  // Now - current speed limit (no distance)
+  makeChip("Now", current?.value, null, "highlight");
 
-  if (Array.isArray(subsequent) && subsequent.length > 0) {
-    subsequent.slice(0, 2).forEach((lim, idx) => {
-      if (!lim.value || lim.value.value == null) return;
-      const kmh = (lim.value.value * 3.6).toFixed(0);
-      const el = document.createElement("div");
-      el.className = "chip";
-      el.textContent = `+${idx + 2}: ${kmh} km/h`;
-      base.appendChild(el);
-    });
+  // Use first 3 elements from nextSpeedLimits array
+  if (Array.isArray(nextSpeedLimits) && nextSpeedLimits.length > 0) {
+    // Next - from nextSpeedLimits[0]
+    makeChip("Next", nextSpeedLimits[0]?.value?.value, nextSpeedLimits[0]?.distanceToNextSpeedLimit, "warn");
+
+    // +2 - from nextSpeedLimits[1]
+    if (nextSpeedLimits.length > 1) {
+      makeChip("+2", nextSpeedLimits[1]?.value?.value, nextSpeedLimits[1]?.distanceToNextSpeedLimit, "");
+    }
+
+    // +3 - from nextSpeedLimits[2]
+    if (nextSpeedLimits.length > 2) {
+      makeChip("+3", nextSpeedLimits[2]?.value?.value, nextSpeedLimits[2]?.distanceToNextSpeedLimit, "");
+    }
   }
 }
 
