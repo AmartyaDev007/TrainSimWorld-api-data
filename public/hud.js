@@ -7,8 +7,6 @@ const speedLimitChipsEl = document.getElementById("speedLimitChips");
 const stationNameEl = document.getElementById("stationName");
 const stationDistanceEl = document.getElementById("stationDistance");
 const gradientValueEl = document.getElementById("gradientValue");
-const gradientTagEl = document.getElementById("gradientTag");
-const rawGradientChipEl = document.getElementById("rawGradientChip");
 const connectionStatusEl = document.getElementById("connectionStatus");
 const statusTextEl = document.getElementById("statusText");
 const lastUpdateEl = document.getElementById("lastUpdate");
@@ -128,18 +126,12 @@ function handleStatus(data) {
   stationNameEl.textContent = data.next_station_name || "—";
   stationDistanceEl.textContent = "Distance: " + formatKm(data.next_station_distance);
 
-  const g = data.gradient_percent;
-  if (g == null || isNaN(g)) {
-    gradientValueEl.textContent = "—";
-    gradientTagEl.textContent = "Unknown";
-  } else {
-    gradientValueEl.textContent = g.toFixed(1) + "%";
-    gradientTagEl.textContent =
-      g > 0.1 ? "Uphill" : g < -0.1 ? "Downhill" : "Level";
-  }
-
   const rawG = data.gradient_raw;
-  rawGradientChipEl.textContent = "HUD: " + (rawG == null ? "—" : rawG.toFixed(1) + "%");
+  if (rawG == null) {
+    gradientValueEl.textContent = "—";
+  } else {
+    gradientValueEl.textContent = rawG.toFixed(1) + "%";
+  }
 
   lastUpdateEl.textContent = "Last update: " + new Date().toLocaleTimeString();
 }

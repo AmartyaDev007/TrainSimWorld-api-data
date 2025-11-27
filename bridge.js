@@ -107,17 +107,7 @@ async function buildStatusSnapshot() {
   const speedKph = speedMps * 3.6;
   const accelMps2 = computeAcceleration(speedMps);
 
-  // Gradient from trackHeights
-  let gradient = null;
-  if (track.trackHeights && track.trackHeights.length >= 2) {
-    const h1 = track.trackHeights[0];
-    const h2 = track.trackHeights[1];
-    const dh = h2.height - h1.height;
-    const dx = h2.distanceToHeight - h1.distanceToHeight;
-    if (dx !== 0) {
-      gradient = (dh / dx) * 100;
-    }
-  }
+  // Gradient calculation removed as per request
 
   // ---------------------------------------------
   // Station Logic
@@ -177,9 +167,7 @@ async function buildStatusSnapshot() {
     next_station_name: nextStationName,
     next_station_distance: nextStationDistance,
 
-    gradient_percent: gradient,
-    uphill: gradient > 0,
-    downhill: gradient < 0
+    next_station_distance: nextStationDistance
   };
 }
 
