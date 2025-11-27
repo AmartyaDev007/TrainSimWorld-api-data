@@ -165,8 +165,6 @@ async function buildStatusSnapshot() {
     next_signals: nextSignals,
 
     next_station_name: nextStationName,
-    next_station_distance: nextStationDistance,
-
     next_station_distance: nextStationDistance
   };
 }

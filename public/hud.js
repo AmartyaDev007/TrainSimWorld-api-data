@@ -80,7 +80,7 @@ function updateSignal(aspect, nextSignals) {
     nextSignals.slice(0, 3).forEach((s, idx) => {
       const chip = document.createElement("div");
       chip.className = "chip";
-      chip.textContent = `S${idx + 1}: ${s.value || "?"} (${Math.round(s.distanceToNextSignal || 0)} m)`;
+      chip.textContent = `S${idx + 1}: ${s.value || "?"} (${Math.round((s.distanceToNextSignal || 0) / 100)} m)`;
       speedLimitChipsEl.appendChild(chip);
     });
   }
