@@ -128,20 +128,11 @@ async function buildStatusSnapshot() {
   // We need player's current distance along the track
   const playerDist = track.lastPlayerPosition?.distanceToHeight ?? 0;
 
-  if (track.stations && Array.isArray(track.stations)) {
-    // Filter for stations ahead of the player
-    // Assuming distanceToStationCM is the linear distance along track
-    // and matches the units of playerDist (or close enough to be comparable)
-    const stationsAhead = track.stations
-      .filter(st => st.distanceToStationCM > playerDist)
-      .sort((a, b) => a.distanceToStationCM - b.distanceToStationCM);
-
-    if (stationsAhead.length > 0) {
-      const nextSt = stationsAhead[0];
-      nextStationName = nextSt.stationName;
-      // Calculate relative distance
-      nextStationDistance = nextSt.distanceToStationCM - playerDist;
-    }
+  if (track.markers && Array.isArray(track.markers) && track.markers.length > 0) {
+    const nextSt = track.markers[0];
+    nextStationName = nextSt.stationName;
+    // User requested simple conversion from cm to meters
+    nextStationDistance = Math.round(nextSt.distanceToStationCM / 100);
   }
 
   // Fallback to DriverAid if track logic failed (though user said it wasn't working there)
