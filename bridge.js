@@ -8,231 +8,261 @@ const WebSocket = require("ws");
 const app = express();
 app.use(cors());
 app.use(express.static("public"));
-// ---------------------------------------------
-// Load CommAPIKey from newest TrainSimWorld folder
-// ---------------------------------------------
+
+// ============================================================================
+// 1. Load newest CommAPIKey
+// ============================================================================
 const base = path.join(process.env.HOME || process.env.USERPROFILE, "Documents", "My Games");
 let COMM_KEY = "";
 
 try {
-  const folders = fs.readdirSync(base)
-    .filter(f => f.startsWith("TrainSimWorld"))
-    .sort((a, b) => {
-      const numA = parseInt(a.replace(/\D/g, "")) || 0;
-      const numB = parseInt(b.replace(/\D/g, "")) || 0;
-      return numB - numA;
+    const folders = fs.readdirSync(base)
+        .filter(f => f.startsWith("TrainSimWorld"))
+        .sort((a, b) => {
+            const numA = parseInt(a.replace(/\D/g, "")) || 0;
+            const numB = parseInt(b.replace(/\D/g, "")) || 0;
+            return numB - numA;
+        });
+
+    for (const folder of folders) {
+        const keyFile = path.join(base, folder, "Saved", "Config", "CommAPIKey.txt");
+        if (fs.existsSync(keyFile)) {
+            COMM_KEY = fs.readFileSync(keyFile, "utf8").trim();
+            console.log("CommAPIKey loaded from:", folder, "->", COMM_KEY);
+            break;
+        }
+    }
+} catch (err) {
+    console.error("Failed to load CommAPIKey:", err);
+    process.exit(1);
+}
+
+// ============================================================================
+// 2. Axios wrapper
+// ============================================================================
+async function tsw(path, method = "GET") {
+    const url = `http://127.0.0.1:31270${path}`;
+    const res = await axios({
+        url,
+        method,
+        timeout: 1200,
+        headers: { DTGCommKey: COMM_KEY },
+        validateStatus: () => true
     });
 
-  let foundKey = false;
+    if (res.status !== 200) throw new Error(`TSW ${res.status}: ${path}`);
 
-  for (const folder of folders) {
-    const keyPath = path.join(base, folder, "Saved", "Config", "CommAPIKey.txt");
-    if (fs.existsSync(keyPath)) {
-      COMM_KEY = fs.readFileSync(keyPath, "utf8").trim();
-      console.log("CommAPIKey loaded from:", folder, "->", COMM_KEY);
-      foundKey = true;
-      break;
+    return res.data?.Values ?? res.data ?? {};
+}
+
+// ============================================================================
+// 3. SUBSCRIPTIONS (FAST DATA) — WITH RETRIES
+// ============================================================================
+// ============================================================================
+// SUBSCRIPTIONS — CORRECTED + RETRYING + PROPER PATH FORMAT
+// ============================================================================
+const SUB_ID = 1;
+
+const subscriptionPaths = [
+    "CurrentDrivableActor.Function.HUD_GetSpeed",
+    "CurrentDrivableActor.Function.HUD_GetAcceleration",
+    "CurrentDrivableActor.Function.HUD_GetPowerHandle",
+    "CurrentDrivableActor.Function.HUD_GetElectricBrakeHandle",
+    "CurrentDrivableActor.Function.HUD_GetTrainBrakeHandle",
+    "CurrentDrivableActor.Function.HUD_GetLocomotiveBrakeHandle"
+];
+
+async function subscribeWithRetry(endpoint) {
+    const subPath = `/subscription/${endpoint}?Subscription=${SUB_ID}`;
+
+    while (true) {
+        try {
+            await tsw(subPath, "POST");
+
+            const check = await tsw(`/subscription/?Subscription=${SUB_ID}`, "GET");
+            const entries = check.Entries || [];
+
+            let ok = entries.some(e =>
+                e.Path?.toLowerCase() === endpoint.toLowerCase()
+            );
+
+            if (ok) {
+                console.log("✔ SUBSCRIBED:", endpoint);
+                return;
+            }
+
+        } catch (err) {
+            console.log("❌ failed:", endpoint, err.toString());
+        }
+
+        await new Promise(r => setTimeout(r, 300));
     }
-  }
-
-  if (!foundKey) {
-    throw new Error("No CommAPIKey.txt found in ANY TrainSimWorld folder.");
-  }
-} catch (err) {
-  console.error("CommAPIKey load failed:", err);
-  process.exit(1);
 }
 
-// ---------------------------------------------
-// axios wrapper for TSW API
-// ---------------------------------------------
-async function tsw(apiPath, method = "GET") {
-  const url = `http://127.0.0.1:31270${apiPath}`;
+async function setupSubscription() {
+    console.log("Setting up TSW subscription…");
 
-  const res = await axios({
-    url,
-    method,
-    timeout: 1500,
-    headers: {
-      "DTGCommKey": COMM_KEY
-    },
-    validateStatus: () => true
-  });
-
-  if (res.status !== 200) {
-    throw new Error(`TSW returned ${res.status}`);
-  }
-
-  // Most endpoints wrap data in .Values, but some might not
-  return res.data?.Values ?? res.data ?? {};
-}
-
-// ---------------------------------------------
-// Acceleration tracking (m/s²)
-// ---------------------------------------------
-let lastSpeedMps = null;
-let lastSampleTimeMs = null;
-
-function computeAcceleration(currentSpeedMps) {
-  const now = Date.now();
-  let accel = 0;
-
-  if (lastSpeedMps !== null && lastSampleTimeMs !== null) {
-    const dt = (now - lastSampleTimeMs) / 1000; // seconds
-    if (dt > 0) {
-      accel = (currentSpeedMps - lastSpeedMps) / dt;
+    for (const ep of subscriptionPaths) {
+        subscribeWithRetry(ep); // parallel retry loops
     }
-  }
-
-  lastSpeedMps = currentSpeedMps;
-  lastSampleTimeMs = now;
-
-  return accel;
 }
 
-// ---------------------------------------------
-// Build one status snapshot (used by HTTP + WS)
-// ---------------------------------------------
-async function buildStatusSnapshot() {
-  // 1. Speed
-  const speed = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetSpeed`);
-
-  // 2. DriverAid data (signals, limits, gradient, maybe station info)
-  const driverAid = await tsw(`/get/DriverAid.Data`);
-
-  // 3. Track data (for gradient calc)
-  const track = await tsw(`/get/DriverAid.TrackData`);
-
-  // 4. Controls (Throttle / Brakes)
-  const powerHandle = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetPowerHandle`);
-  const electricBrake = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetElectricBrakeHandle`);
-  const locoBrake = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetLocomotiveBrakeHandle`);
-  const trainBrake = await tsw(`/get/CurrentDrivableActor.Function.HUD_GetTrainBrakeHandle`);
-
-  const speedMps = speed["Speed (ms)"] ?? speed.return ?? speed.value ?? 0;
-  const speedKph = speedMps * 3.6;
-  const accelMps2 = computeAcceleration(speedMps);
-
-  // Gradient calculation removed as per request
-
-  // ---------------------------------------------
-  // Station Logic
-  // ---------------------------------------------
-  let nextStationName = null;
-  let nextStationDistance = null;
-
-  // We need player's current distance along the track
-  const playerDist = track.lastPlayerPosition?.distanceToHeight ?? 0;
-
-  if (track.markers && Array.isArray(track.markers) && track.markers.length > 0) {
-    const nextSt = track.markers[0];
-    nextStationName = nextSt.stationName;
-    // User requested simple conversion from cm to meters
-    nextStationDistance = Math.round(nextSt.distanceToStationCM / 100);
-  }
-
-  // Fallback to DriverAid if track logic failed (though user said it wasn't working there)
-  if (!nextStationName) {
-    nextStationName =
-      driverAid.nextStationName ??
-      driverAid.nextStopName ??
-      driverAid.nextStation ??
-      null;
-  }
-
-  if (nextStationDistance === null) {
-    nextStationDistance =
-      driverAid.distanceToNextStation ??
-      driverAid.distanceToNextStop ??
-      null;
-  }
-
-  // Signals array field name varies: nextSignals / nextsignals etc.
-  const nextSignals =
-    driverAid.nextSignals ??
-    driverAid.NextSignals ??
-    null;
-
-  return {
-    speed_mps: speedMps,
-    speed_kph: speedKph,
-
-    accel_mps2: accelMps2,
-
-    distance_to_signal: driverAid.distanceToSignal ?? null,
-    distance_to_next_speedlimit: driverAid.distanceToNextSpeedLimit ?? null,
-    gradient_raw: driverAid.gradient ?? null,
-
-    speed_limit: driverAid.speedLimit ?? null,
-    next_speed_limit: driverAid.nextSpeedLimit ?? null,
-    next_speed_limits: driverAid.nextSpeedLimits ?? null,
-
-    next_signal_aspect: driverAid.signalAspectClass ?? null,
-    next_signals: nextSignals,
-
-    next_station_name: nextStationName,
-    next_station_distance: nextStationDistance,
-
-    // Controls
-    power_pct: Math.round((powerHandle.Power ?? 0) * 10),
-    electric_brake_pct: Math.round((electricBrake.HandlePosition ?? 0) * 100),
-    loco_brake_pct: Math.round((locoBrake.HandlePosition ?? 0) * 100),
-    train_brake_pct: Math.round((trainBrake.HandlePosition ?? 0) * 100)
-  };
+async function readSubscription() {
+    const data = await tsw(`/subscription/?Subscription=${SUB_ID}`, "GET");
+    return data.Entries || [];
 }
 
-// ---------------------------------------------
-// HTTP: /status → JSON snapshot
-// ---------------------------------------------
+// ============================================================================
+// 4. POLLING (HEAVY DATA)
+// ============================================================================
+let driverAidCache = null;
+let trackDataCache = null;
+
+async function pollDriverAid() {
+    try {
+        driverAidCache = await tsw("/get/DriverAid.Data");
+    } catch {}
+}
+
+async function pollTrackData() {
+    try {
+        trackDataCache = await tsw("/get/DriverAid.TrackData");
+    } catch {}
+}
+
+setInterval(pollDriverAid, 250);
+setInterval(pollTrackData, 500);
+
+// ============================================================================
+// 5. Acceleration compute
+// ============================================================================
+let lastSpeed = null;
+let lastTime = null;
+
+function computeAccel(speed) {
+    const now = Date.now();
+    if (lastSpeed !== null && lastTime !== null) {
+        let dt = (now - lastTime) / 1000;
+        let a = dt > 0 ? (speed - lastSpeed) / dt : 0;
+        lastSpeed = speed;
+        lastTime = now;
+        return a;
+    }
+    lastSpeed = speed;
+    lastTime = now;
+    return 0;
+}
+
+// ============================================================================
+// 6. Merge snapshot for HUD
+// ============================================================================
+async function buildStatus() {
+    const subEntries = await readSubscription();
+
+    let speedMps = 0,
+        power = 0,
+        eBrake = 0,
+        tBrake = 0,
+        lBrake = 0;
+
+    for (const e of subEntries) {
+        const path = e.Path?.toLowerCase();
+        const v = e.Values;
+
+        if (!path || !v) continue;
+
+        if (path.includes("speed")) {
+            speedMps = v["Speed (ms)"] ?? v.value ?? 0;
+        }
+        if (path.includes("powerhandle")) {
+            power = v.Power ?? v.value ?? 0;
+        }
+        if (path.includes("electricbrakehandle")) {
+            eBrake = v.HandlePosition ?? 0;
+        }
+        if (path.includes("trainbrakehandle")) {
+            tBrake = v.HandlePosition ?? 0;
+        }
+        if (path.includes("locomotivebrakehandle")) {
+            lBrake = v.HandlePosition ?? 0;
+        }
+    }
+
+    const accel = computeAccel(speedMps);
+
+    // next station from TrackData
+    let nextStationName = null;
+    let nextStationDistance = null;
+
+    if (trackDataCache?.markers?.length > 0) {
+        const st = trackDataCache.markers[0];
+        nextStationName = st.stationName ?? null;
+        nextStationDistance = Math.round(st.distanceToStationCM / 100);
+    }
+
+    return {
+        speed_mps: speedMps,
+        speed_kph: speedMps * 3.6,
+        accel_mps2: accel,
+
+        distance_to_signal: driverAidCache?.distanceToSignal ?? null,
+        gradient_raw: driverAidCache?.gradient ?? null,
+        next_signal_aspect: driverAidCache?.signalAspectClass ?? null,
+
+        speed_limit: driverAidCache?.speedLimit ?? null,
+        next_speed_limit: driverAidCache?.nextSpeedLimit ?? null,
+        next_speed_limits: driverAidCache?.nextSpeedLimits ?? [],
+
+        next_signals: driverAidCache?.nextSignals ?? [],     //  ← ADD THIS BACK
+
+        next_station_name: nextStationName,
+        next_station_distance: nextStationDistance,
+
+        power_pct: Math.round(power * 10),
+        electric_brake_pct: Math.round(eBrake * 100),
+        train_brake_pct: Math.round(tBrake * 100),
+        loco_brake_pct: Math.round(lBrake * 100)
+    };
+}
+
+// ============================================================================
+// 7. HTTP: /status
+// ============================================================================
 app.get("/status", async (req, res) => {
-  try {
-    const data = await buildStatusSnapshot();
-    res.json(data);
-  } catch (err) {
-    console.error("STATUS ERROR:", err);
-    res.status(500).json({ error: err.toString() });
-  }
+    try {
+        res.json(await buildStatus());
+    } catch (err) {
+        res.status(500).json({ error: err.toString() });
+    }
 });
 
-// ---------------------------------------------
-// Serve HUD HTML on /
-// ---------------------------------------------
+// ============================================================================
+// 8. Serve HUD
+// ============================================================================
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "hud.html"));
+    res.sendFile(path.join(__dirname, "hud.html"));
 });
 
-// ---------------------------------------------
-// Start HTTP + WebSocket servers
-// ---------------------------------------------
+// ============================================================================
+// 9. WebSocket push
+// ============================================================================
 const PORT = 8080;
 const server = app.listen(PORT, () => {
-  console.log("Bridge server running on http://localhost:" + PORT);
+    console.log("Bridge running at http://localhost:" + PORT);
+    setupSubscription();
 });
 
 const wss = new WebSocket.Server({ server });
 
-wss.on("connection", (ws) => {
-  console.log("WebSocket client connected");
-
-  ws.on("close", () => {
-    console.log("WebSocket client disconnected");
-  });
-});
-
-// Push updates to all ws clients ~4 times per second
 setInterval(async () => {
-  if (wss.clients.size === 0) return;
+    if (wss.clients.size === 0) return;
 
-  try {
-    const snapshot = await buildStatusSnapshot();
-    const message = JSON.stringify({ type: "status", data: snapshot });
+    try {
+        const snap = await buildStatus();
+        const msg = JSON.stringify({ type: "status", data: snap });
 
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
-    });
-  } catch (err) {
-    console.error("WS broadcast error:", err.toString());
-  }
-}, 250);
+        wss.clients.forEach(c => {
+            if (c.readyState === WebSocket.OPEN) c.send(msg);
+        });
+    } catch {}
+}, 150);   // SUPER smooth updates (~7 FPS)
