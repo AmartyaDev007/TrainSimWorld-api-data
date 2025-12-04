@@ -4,8 +4,14 @@ const accelBadgeEl = document.getElementById("accelBadge");
 const signalDotEl = document.getElementById("signalDot");
 const signalTextEl = document.getElementById("signalText");
 const speedLimitChipsEl = document.getElementById("speedLimitChips");
+
 const stationNameEl = document.getElementById("stationName");
 const stationDistanceEl = document.getElementById("stationDistance");
+const secondStationNameEl = document.getElementById('secondStationName');
+const secondStationDistanceEl = document.getElementById('secondStationDistance');
+const thirdStationNameEl = document.getElementById('thirdStationName');
+const thirdStationDistanceEl = document.getElementById('thirdStationDistance');
+
 const gradientValueEl = document.getElementById("gradientValue");
 const connectionStatusEl = document.getElementById("connectionStatus");
 const statusTextEl = document.getElementById("statusText");
@@ -142,6 +148,13 @@ function handleStatus(data) {
 
   stationNameEl.textContent = data.next_station_name || "—";
   stationDistanceEl.textContent = "Distance: " + formatKm(data.next_station_distance);
+
+  secondStationNameEl.textContent = data.second_Next_Station_Name || "—";
+  secondStationDistanceEl.textContent = "Distance: " + formatKm(data.second_Next_Station_Distance);
+
+  thirdStationNameEl.textContent = data.third_Next_Station_Name || "—";
+  thirdStationDistanceEl.textContent = "Distance: " + formatKm(data.third_Next_Station_Distance);
+
 
   const rawG = data.gradient_raw;
   if (rawG == null) {

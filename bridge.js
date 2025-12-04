@@ -193,11 +193,27 @@ async function buildStatus() {
     // next station from TrackData
     let nextStationName = null;
     let nextStationDistance = null;
+    let secondNextStationName = null;
+    let secondNextStationDistance = null; 
+    let thirdNextStationName = null; 
+    let thirdNextStationDistance = null; 
 
     if (trackDataCache?.markers?.length > 0) {
         const st = trackDataCache.markers[0];
         nextStationName = st.stationName ?? null;
         nextStationDistance = Math.round(st.distanceToStationCM / 100);
+
+        if (trackDataCache?.markers?.length > 1) { 
+            const st2 = trackDataCache.markers[1];
+            secondNextStationName = st2.stationName ?? null; 
+            secondNextStationDistance = Math.round(st2.distanceToStationCM / 100);
+        }
+
+        if (trackDataCache?.markers?.length > 2) { 
+            const st3 = trackDataCache.markers[2];
+            thirdNextStationName = st3.stationName ?? null; 
+            thirdNextStationDistance = Math.round(st3.distanceToStationCM / 100);
+        }
     }
 
     return {
@@ -217,6 +233,13 @@ async function buildStatus() {
 
         next_station_name: nextStationName,
         next_station_distance: nextStationDistance,
+
+        second_Next_Station_Name: secondNextStationName,
+        second_Next_Station_Distance: secondNextStationDistance,
+
+        third_Next_Station_Name: thirdNextStationName,
+        third_Next_Station_Distance: thirdNextStationDistance,
+
 
         power_pct: Math.round(power * 10),
         electric_brake_pct: Math.round(eBrake * 100),
